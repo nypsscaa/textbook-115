@@ -50,11 +50,15 @@
 
     const { useState, useEffect } = React;
 
-    // --- 常數與預設資料設定 ---
+    // ==========================================
+    // --- 系統總設定區 (以後換學期或換時間，只需修改這裡) ---
+    // ==========================================
     const SCHOOL_NAME = "澎湖縣白沙鄉鳥嶼國民小學";
-    const ACADEMIC_YEAR = "115";
-    const PREV_ACADEMIC_YEAR = "114";
-    const CONVENER = "王雅嫺校長";
+    const ACADEMIC_YEAR = "115";           // 目前學年度 (顯示於標題)
+    const PREV_ACADEMIC_YEAR = "114";      // 舊學年度 (用來帶入沿用版本)
+    const CONVENER = "王雅嫺校長";           // 召集人姓名
+    const MEETING_DATE = "115年5月9日";    // 統一會議日期 (若留空 "" 則會自動抓老師填表當天的日期)
+    // ==========================================
 
     const PUBLISHERS = ["康軒", "翰林", "南一"];
     const GRADES = ["一年級", "二年級", "三年級", "四年級", "五年級", "六年級"];
@@ -111,13 +115,21 @@
 
     function App() {
       const [activeTab, setActiveTab] = useState('form'); 
-      const [records, setRecords] = useState([]);
       const [printRecord, setPrintRecord] = useState(null);
       const [toast, setToast] = useState(null);
       const [user, setUser] = useState(null);
       const [isSaving, setIsSaving] = useState(false);
       const [showShareModal, setShowShareModal] = useState(false);
       const [editingId, setEditingId] = useState(null);
+      
+      // ★ 雙重保險：即使離線，也會優先從瀏覽器深度記憶中抓取之前的資料
+      const [records, setRecords] = useState(() => {
+        const saved = localStorage.getItem('bird_island_textbook_records');
+        if (saved) {
+          try { return JSON.parse(saved); } catch(e) { return []; }
+        }
+        return [];
+      });
 
       const [formData, setFormData] = useState(getInitialFormData());
       const [availableSubjects, setAvailableSubjects] = useState([]);
@@ -129,13 +141,18 @@
         };
       }
 
-      // 初始化 Firebase 認證
+      // 每次紀錄更新時，同時備份到 localStorage (防止重整消失)
+      useEffect(() => {
+        localStorage.setItem('bird_island_textbook_records', JSON.stringify(records));
+      }, [records]);
+
+      // 初始化 Firebase 認證 (這一步需要 Firebase Authentication 啟用匿名登入)
       useEffect(() => {
         const initAuth = async () => {
           try {
             await signInAnonymously(auth);
           } catch (error) {
-            console.error("Firebase 登入失敗", error);
+            console.error("Firebase 登入失敗 (請確認是否啟用匿名登入)", error);
           }
         };
         initAuth();
@@ -143,9 +160,9 @@
         return () => unsubscribe();
       }, []);
 
-      // 監聽 Firebase 雲端資料 (已解決 Nested arrays 問題)
+      // 監聽 Firebase 雲端資料
       useEffect(() => {
-        if (!user) return;
+        if (!user) return; // 如果沒有成功匿名登入，就不會執行雲端同步
         try {
           if (Object.keys(firebaseConfig).length === 0) return;
           
@@ -154,13 +171,8 @@
             const fetchedRecords = snapshot.docs.map(doc => {
               const data = doc.data();
               let parsedScores = data.scores;
-              // 處理 Nested arrays 問題：從 Firestore 讀取時將 JSON 字串轉回 2D 陣列
               if (typeof data.scores === 'string') {
-                try {
-                  parsedScores = JSON.parse(data.scores);
-                } catch (e) {
-                  console.error("解析分數資料失敗", e);
-                }
+                try { parsedScores = JSON.parse(data.scores); } catch (e) {}
               }
               return { id: doc.id, ...data, scores: parsedScores };
             });
@@ -226,7 +238,7 @@
 
       const isEnglishSubject = formData.subject === "語文領域英語文" || formData.subject === "彈性課程望潮英創客";
 
-      // --- 送出資料邏輯 (全面防堵 Nested Arrays 錯誤) ---
+      // --- 送出資料邏輯 ---
       const handleSubmit = async () => {
         if (!formData.grade || !formData.subject) return showToast("請選擇年級與科目！");
         if (formData.decision === 'change' && (!formData.changedPublisher || !formData.reason)) return showToast("若選擇改用，請選擇新版本並填寫原因！");
@@ -236,55 +248,50 @@
         let finalPublisher = formData.decision === 'keep' ? prevVersion : formData.changedPublisher;
         if (isEnglishSubject && formData.seriesName.trim()) finalPublisher += ` - ${formData.seriesName.trim()}`;
         
+        // 自動判斷日期邏輯：若有設定統一會議日期則套用，否則抓取當天時間
         const d = new Date();
-        const twDate = `${d.getFullYear() - 1911}年${d.getMonth() + 1}月${d.getDate()}日`;
+        const autoTwDate = `${d.getFullYear() - 1911}年${d.getMonth() + 1}月${d.getDate()}日`;
+        const finalDate = MEETING_DATE !== "" ? MEETING_DATE : autoTwDate;
 
-        // 1. 將 scores 陣列與其他資料強制分離，避免意外傳入
+        // 將 scores 陣列與其他資料強制分離
         const { scores, ...otherFormData } = formData;
 
-        // 2. 建立基礎資料物件
+        // 建立基礎資料物件
         const baseData = {
           ...otherFormData,
-          date: twDate,
+          date: finalDate,
           prevVersion,
           finalPublisher,
           timestamp: Date.now()
         };
 
-        // 3. 建立專為 Firestore 準備的物件，將 scores 強制轉為純文字字串
-        const firestoreData = {
-          ...baseData,
-          scores: JSON.stringify(scores) 
-        };
+        // 建立專為 Firestore 準備的物件 (字串化陣列)
+        const firestoreData = { ...baseData, scores: JSON.stringify(scores) };
 
-        // 4. 建立本機暫存用的資料（維持陣列格式方便讀取）
-        const localData = {
-          ...baseData,
-          scores: scores
-        };
+        // 建立本機暫存用的資料 (維持陣列格式)
+        const localData = { ...baseData, scores: scores };
 
         setIsSaving(true);
         try {
           if (user && Object.keys(firebaseConfig).length > 0) {
+            // 已連接 Firebase 雲端
             if (editingId) {
-              // 更新現有紀錄
               const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'textbookReviews', editingId);
               await updateDoc(docRef, firestoreData);
               showToast("紀錄表已成功更新！");
             } else {
-              // 新增紀錄
               const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'textbookReviews');
               await addDoc(colRef, firestoreData);
               showToast("紀錄表已成功新增至雲端！");
             }
           } else {
-            // 未連線時使用本機暫存
+            // 如果 Firebase 沒連上 (例如忘記開匿名登入)，依然會存入 LocalStorage 保護資料
             if (editingId) {
                setRecords(records.map(r => r.id === editingId ? { ...localData, id: editingId } : r));
-               showToast("本機更新成功 (未連線雲端)");
+               showToast("已更新至本機備份 (未連線雲端)");
             } else {
                setRecords([{ ...localData, id: Date.now() }, ...records]);
-               showToast("本機暫存成功 (未連線雲端)");
+               showToast("已存入本機備份 (未連線雲端)");
             }
           }
           
@@ -294,7 +301,7 @@
           setActiveTab('list');
         } catch (error) {
           console.error("儲存失敗", error);
-          showToast("儲存失敗，請檢查網路連線！");
+          showToast("儲存失敗，已暫存至瀏覽器！");
         }
         setIsSaving(false);
       };
@@ -308,7 +315,7 @@
           changedPublisher: record.changedPublisher || "",
           seriesName: record.seriesName || "",
           reason: record.reason || "",
-          scores: record.scores // 已在 onSnapshot 轉回陣列
+          scores: record.scores
         });
         setEditingId(record.id);
         setActiveTab('form');
@@ -666,7 +673,7 @@
               </button>
               <button onClick={handleSubmit} disabled={isSaving}
                 className={`w-full sm:w-auto px-8 py-3 sm:py-2 text-white rounded-xl sm:rounded-lg flex justify-center items-center gap-2 shadow-md font-medium ${isSaving ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                <IconSave /> {isSaving ? '儲存中...' : (editingId ? '更新紀錄表' : '儲存紀錄表 (自動上傳雲端)')}
+                <IconSave /> {isSaving ? '儲存中...' : (editingId ? '更新紀錄表' : '儲存紀錄表 (自動同步)')}
               </button>
             </div>
           </div>
@@ -677,14 +684,23 @@
         return (
           <div className="max-w-6xl mx-auto p-4 sm:p-6 bg-white rounded-xl shadow-sm border border-gray-200">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-2"><span className="text-blue-600"><IconList /></span> 已儲存雲端紀錄</div>
-              <span className="text-sm font-normal text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-200">● 即時同步中</span>
+              <div className="flex items-center gap-2"><span className="text-blue-600"><IconList /></span> 已儲存的紀錄</div>
+              {user ? (
+                <span className="text-sm font-normal text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-200">● 雲端同步中</span>
+              ) : (
+                <span className="text-sm font-normal text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">● 僅保存在本機</span>
+              )}
             </h2>
 
             {records.length === 0 ? (
               <div className="text-center py-16 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300 mx-2">
                 <div className="flex justify-center text-gray-400 mb-4"><IconFileText /></div>
-                <p className="text-lg">目前尚無紀錄，請點擊上方「新增填寫」開始選用。</p>
+                <p className="text-lg">目前尚無紀錄，請點擊上方「新增」開始選用。</p>
+                {!user && (
+                  <p className="text-red-500 mt-4 text-sm max-w-lg mx-auto">
+                    ⚠️ 系統尚未成功連線至雲端 (請確認 Firebase 是否已開啟「匿名登入」)，目前的紀錄將僅保存在您的瀏覽器中。
+                  </p>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-gray-200">
