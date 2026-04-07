@@ -14,6 +14,9 @@
   
   <!-- 載入 Babel (讓瀏覽器看得懂 React 語法) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 載入 HTML 轉 PDF 套件 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800">
   
@@ -112,6 +115,7 @@
     const IconEdit = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
     const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>;
     const IconShare = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>;
+    const IconPdf = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M16 13H8"></path><path d="M16 17H8"></path><path d="M10 9H8"></path></svg>;
 
     function App() {
       const [activeTab, setActiveTab] = useState('form'); 
@@ -342,6 +346,109 @@
         setPrintRecord(record);
         setActiveTab('print');
         setTimeout(() => window.print(), 500);
+      };
+
+      // --- 匯出 PDF (完美鎖定排版) ---
+      const exportToPDF = (record) => {
+        showToast("PDF 產生中，請稍候...");
+        const totals = PUBLISHERS.map((_, i) => calculateTotal(record.scores, i));
+        const ranks = calculateRanks(record.scores);
+        const keepText = record.decision === 'keep' ? (record.seriesName ? `${record.prevVersion}-${record.seriesName}` : record.prevVersion) : '';
+        const changeText = record.decision === 'change' ? (record.seriesName ? `${record.changedPublisher}-${record.seriesName}` : record.changedPublisher) : '';
+
+        // 建立隱藏的 HTML 元素提供給 html2pdf 擷取
+        const element = document.createElement('div');
+        element.innerHTML = `
+          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; padding: 10mm 15mm; background: white; width: 210mm;">
+            <!-- 第一頁：審查紀錄表 -->
+            <div style="font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 25px; letter-spacing: 2px;">
+              ${SCHOOL_NAME}${ACADEMIC_YEAR}學年度${record.grade}${record.subject}教科書審查紀錄表
+            </div>
+            <div style="font-size: 14pt; line-height: 2;">
+              <div>時間： ${record.date}</div>
+              <div>召集人： ${CONVENER}</div>
+              <div>評比教師： ${record.reviewers}</div>
+              <div>評比說明：</div>
+              <ol style="padding-left: 28px; margin-top: 5px; margin-bottom: 10px;">
+                <li>請參考附件之評選標準，將各版本課本、習作、教學指引一併評比，以求客觀公正。</li>
+                <li>請與同年段該領域授課教師共同討論選用版本，並相互協調意見後再決定版本。</li>
+                <li>若沿用前學年度版本請勾選填寫「沿用　　　版本」；若更換版本請勾選填寫「改用　　　版本」，年度領域小組成員討論並寫下更換原因，並請年段領域選用代表人於會議上報告。</li>
+              </ol>
+              <div>評比意見：</div>
+              <div style="padding-left: 20px; margin-top: 15px;">
+                <div>
+                  <span style="display:inline-block; width:16px; height:16px; border:1px solid black; margin-right:8px; text-align:center; line-height:16px; font-size:14px; font-weight:bold; vertical-align:middle;">
+                    ${record.decision === 'keep' ? '✓' : '&nbsp;'}
+                  </span>
+                  教科書沿用前學年度 <span style="display:inline-block; border-bottom:1px solid black; min-width:120px; text-align:center; padding:0 10px;">${keepText}</span> 版本。
+                </div>
+                <div style="margin-top: 15px;">
+                  <span style="display:inline-block; width:16px; height:16px; border:1px solid black; margin-right:8px; text-align:center; line-height:16px; font-size:14px; font-weight:bold; vertical-align:middle;">
+                    ${record.decision === 'change' ? '✓' : '&nbsp;'}
+                  </span>
+                  教科書改用 <span style="display:inline-block; border-bottom:1px solid black; min-width:120px; text-align:center; padding:0 10px;">${changeText}</span> 版本，
+                </div>
+                <div style="margin-left: 28px; margin-top: 10px;">
+                  更換原因為： <span style="display:inline-block; border-bottom:1px solid black; width:400px; padding:0 10px;">${record.reason}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 分頁符號 -->
+            <div class="html2pdf__page-break"></div>
+
+            <!-- 第二頁：評選標準 -->
+            <div style="margin-top: 20px; padding-top: 20px;">
+              <div style="font-weight: bold; margin-bottom: 15px; font-size: 16pt;">附件 評選標準參考</div>
+              <table style="width: 100%; border-collapse: collapse; font-size: 13pt;">
+                <thead>
+                  <tr>
+                    <th rowspan="2" style="width: 45%; border: 1px solid black; padding: 8px; text-align: center;">評比內容</th>
+                    <th colspan="3" style="border: 1px solid black; padding: 8px; text-align: center;">版本</th>
+                  </tr>
+                  <tr>
+                    ${PUBLISHERS.map(pub => `<th style="border: 1px solid black; padding: 8px; text-align: center;">${pub}</th>`).join('')}
+                  </tr>
+                  <tr style="font-size: 10pt; font-weight: normal;">
+                    <th style="border: 1px solid black; padding: 8px;"></th>
+                    ${PUBLISHERS.map(() => `<th style="border: 1px solid black; padding: 8px; text-align: center;">極佳 5 佳 4 尚可 3 差 2 極差 1</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${CRITERIA.map((criterion, cIdx) => `
+                    <tr>
+                      <td style="border: 1px solid black; padding: 8px;">${criterion}</td>
+                      ${PUBLISHERS.map((pub, pIdx) => `<td style="text-align: center; border: 1px solid black; padding: 8px;">${record.scores[cIdx][pIdx]}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                  <tr style="font-weight: bold;">
+                    <td style="text-align: right; border: 1px solid black; padding: 8px;">總分</td>
+                    ${totals.map((t) => `<td style="text-align: center; border: 1px solid black; padding: 8px;">${t}</td>`).join('')}
+                  </tr>
+                  <tr style="font-weight: bold;">
+                    <td style="text-align: right; border: 1px solid black; padding: 8px;">名次（順位）</td>
+                    ${ranks.map((rank) => `<td style="text-align: center; border: 1px solid black; padding: 8px;">${rank}</td>`).join('')}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        const opt = {
+          margin:       0,
+          filename:     `${record.grade}${record.subject}_審查紀錄表.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(element).save().then(() => {
+          showToast("PDF 檔案已成功下載！");
+        }).catch(err => {
+          console.error("PDF 產生失敗", err);
+          showToast("PDF 產生失敗，請再試一次。");
+        });
       };
 
       // --- 匯出 Word ---
@@ -696,15 +803,10 @@
               <div className="text-center py-16 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300 mx-2">
                 <div className="flex justify-center text-gray-400 mb-4"><IconFileText /></div>
                 <p className="text-lg">目前尚無紀錄，請點擊上方「新增」開始選用。</p>
-                {!user && (
-                  <p className="text-red-500 mt-4 text-sm max-w-lg mx-auto">
-                    ⚠️ 系統尚未成功連線至雲端 (請確認 Firebase 是否已開啟「匿名登入」)，目前的紀錄將僅保存在您的瀏覽器中。
-                  </p>
-                )}
               </div>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="w-full text-left border-collapse min-w-[800px]">
+                <table className="w-full text-left border-collapse min-w-[900px]">
                   <thead>
                     <tr className="bg-gray-100 text-gray-700">
                       <th className="p-4 border-b font-semibold">填寫日期</th>
@@ -729,6 +831,9 @@
                         </td>
                         <td className="p-4 border-b text-center">
                           <div className="flex justify-center items-center gap-2">
+                            <button onClick={() => exportToPDF(r)} className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium shadow-sm" title="下載為 PDF">
+                              <IconPdf /> PDF
+                            </button>
                             <button onClick={() => exportToWord(r)} className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium shadow-sm" title="下載為 Word">
                               <IconDownload /> Word
                             </button>
@@ -818,8 +923,9 @@
               </table>
             </div>
 
-            <div className="mt-8 flex justify-center gap-4 print:hidden">
+            <div className="mt-8 flex flex-wrap justify-center gap-4 print:hidden">
               <button onClick={() => setActiveTab('list')} className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium">返回列表</button>
+              <button onClick={() => exportToPDF(r)} className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 font-medium"><IconPdf /> 下載 PDF</button>
               <button onClick={() => exportToWord(r)} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"><IconDownload /> 下載 Word</button>
             </div>
           </div>
