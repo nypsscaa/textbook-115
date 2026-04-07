@@ -166,7 +166,7 @@
 
       // 監聽 Firebase 雲端資料
       useEffect(() => {
-        if (!user) return; // 如果沒有成功匿名登入，就不會執行雲端同步
+        if (!user) return; 
         try {
           if (Object.keys(firebaseConfig).length === 0) return;
           
@@ -175,6 +175,7 @@
             const fetchedRecords = snapshot.docs.map(doc => {
               const data = doc.data();
               let parsedScores = data.scores;
+              // ★ 自動將從 Firebase 抓下來的字串解碼回陣列
               if (typeof data.scores === 'string') {
                 try { parsedScores = JSON.parse(data.scores); } catch (e) {}
               }
@@ -252,10 +253,10 @@
         let finalPublisher = formData.decision === 'keep' ? prevVersion : formData.changedPublisher;
         if (isEnglishSubject && formData.seriesName.trim()) finalPublisher += ` - ${formData.seriesName.trim()}`;
         
-        // 自動判斷日期邏輯：若有設定統一會議日期則套用，否則抓取當天時間
+        // 自動判斷日期邏輯
         const d = new Date();
         const autoTwDate = `${d.getFullYear() - 1911}年${d.getMonth() + 1}月${d.getDate()}日`;
-        const finalDate = MEETING_DATE !== "" ? MEETING_DATE : autoTwDate;
+        const submitDate = MEETING_DATE !== "" ? MEETING_DATE : autoTwDate;
 
         // 將 scores 陣列與其他資料強制分離
         const { scores, ...otherFormData } = formData;
@@ -263,13 +264,13 @@
         // 建立基礎資料物件
         const baseData = {
           ...otherFormData,
-          date: finalDate,
+          date: submitDate, // 保留填寫時的時間供列表顯示
           prevVersion,
           finalPublisher,
           timestamp: Date.now()
         };
 
-        // 建立專為 Firestore 準備的物件 (字串化陣列)
+        // ★ 建立專為 Firestore 準備的物件 (強制將陣列字串化，避免 nested array error)
         const firestoreData = { ...baseData, scores: JSON.stringify(scores) };
 
         // 建立本機暫存用的資料 (維持陣列格式)
@@ -289,7 +290,7 @@
               showToast("紀錄表已成功新增至雲端！");
             }
           } else {
-            // 如果 Firebase 沒連上 (例如忘記開匿名登入)，依然會存入 LocalStorage 保護資料
+            // 如果 Firebase 沒連上，存入 LocalStorage
             if (editingId) {
                setRecords(records.map(r => r.id === editingId ? { ...localData, id: editingId } : r));
                showToast("已更新至本機備份 (未連線雲端)");
@@ -348,7 +349,7 @@
         setTimeout(() => window.print(), 500);
       };
 
-      // --- 匯出 PDF (完美鎖定排版) ---
+      // --- 匯出 PDF (完美鎖定排版，強制套用全域 MEETING_DATE，並修正說明文字格式) ---
       const exportToPDF = (record) => {
         showToast("PDF 產生中，請稍候...");
         const totals = PUBLISHERS.map((_, i) => calculateTotal(record.scores, i));
@@ -356,7 +357,6 @@
         const keepText = record.decision === 'keep' ? (record.seriesName ? `${record.prevVersion}-${record.seriesName}` : record.prevVersion) : '';
         const changeText = record.decision === 'change' ? (record.seriesName ? `${record.changedPublisher}-${record.seriesName}` : record.changedPublisher) : '';
 
-        // 建立隱藏的 HTML 元素提供給 html2pdf 擷取
         const element = document.createElement('div');
         element.innerHTML = `
           <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; padding: 10mm 15mm; background: white; width: 210mm;">
@@ -365,15 +365,15 @@
               ${SCHOOL_NAME}${ACADEMIC_YEAR}學年度${record.grade}${record.subject}教科書審查紀錄表
             </div>
             <div style="font-size: 14pt; line-height: 2;">
-              <div>時間： ${record.date}</div>
+              <div>時間： ${MEETING_DATE || record.date}</div>
               <div>召集人： ${CONVENER}</div>
               <div>評比教師： ${record.reviewers}</div>
               <div>評比說明：</div>
-              <ol style="padding-left: 28px; margin-top: 5px; margin-bottom: 10px;">
-                <li>請參考附件之評選標準，將各版本課本、習作、教學指引一併評比，以求客觀公正。</li>
-                <li>請與同年段該領域授課教師共同討論選用版本，並相互協調意見後再決定版本。</li>
-                <li>若沿用前學年度版本請勾選填寫「沿用　　　版本」；若更換版本請勾選填寫「改用　　　版本」，年度領域小組成員討論並寫下更換原因，並請年段領域選用代表人於會議上報告。</li>
-              </ol>
+              <div style="padding-left: 10px; margin-top: 5px; margin-bottom: 10px;">
+                <div>1. 請參考附件之評選標準,將各版本課本、習作、教學指引一併評比，以求客觀公正。</div>
+                <div>2. 請與同年段該領域授課教師共同討論選用版本,並相互協調意見後再決定版本。</div>
+                <div>3. 若沿用前學年度版本請勾選填寫「沿用______版本」;若更換版本請勾選填寫「改用________版本」,年度領域小組成員討論並寫下更換原因,並請年段領域選用代表人於會議上報告。</div>
+              </div>
               <div>評比意見：</div>
               <div style="padding-left: 20px; margin-top: 15px;">
                 <div>
@@ -394,7 +394,6 @@
               </div>
             </div>
             
-            <!-- 分頁符號 -->
             <div class="html2pdf__page-break"></div>
 
             <!-- 第二頁：評選標準 -->
@@ -451,7 +450,7 @@
         });
       };
 
-      // --- 匯出 Word ---
+      // --- 匯出 Word (強制套用全域 MEETING_DATE，並修正說明文字格式) ---
       const exportToWord = (record) => {
         const totals = PUBLISHERS.map((_, i) => calculateTotal(record.scores, i));
         const ranks = calculateRanks(record.scores);
@@ -476,15 +475,15 @@
             <!-- 第一頁：審查紀錄表 -->
             <div class="doc-title">${SCHOOL_NAME}${ACADEMIC_YEAR}學年度${record.grade}${record.subject}教科書審查紀錄表</div>
             <div class="doc-info">
-              <div>時間： ${record.date}</div>
+              <div>時間： ${MEETING_DATE || record.date}</div>
               <div>召集人： ${CONVENER}</div>
               <div>評比教師： ${record.reviewers}</div>
               <div>評比說明：</div>
-              <ol style="padding-left: 24px; margin-top: 5px; margin-bottom: 5px;">
-                <li>請參考附件之評選標準，將各版本課本、習作、教學指引一併評比，以求客觀公正。</li>
-                <li>請與同年段該領域授課教師共同討論選用版本，並相互協調意見後再決定版本。</li>
-                <li>若沿用前學年度版本請勾選填寫「沿用　　　版本」；若更換版本請勾選填寫「改用　　　版本」，年度領域小組成員討論並寫下更換原因，並請年段領域選用代表人於會議上報告。</li>
-              </ol>
+              <div style="padding-left: 10px; margin-top: 5px; margin-bottom: 10px;">
+                <div>1. 請參考附件之評選標準,將各版本課本、習作、教學指引一併評比，以求客觀公正。</div>
+                <div>2. 請與同年段該領域授課教師共同討論選用版本,並相互協調意見後再決定版本。</div>
+                <div>3. 若沿用前學年度版本請勾選填寫「沿用______版本」;若更換版本請勾選填寫「改用________版本」,年度領域小組成員討論並寫下更換原因,並請年段領域選用代表人於會議上報告。</div>
+              </div>
               <div>評比意見：</div>
               <div style="padding-left: 20px; margin-top: 10px;">
                 <div>
@@ -888,20 +887,20 @@
 
             <div className="doc-title">{SCHOOL_NAME}{ACADEMIC_YEAR}學年度{r.grade}{r.subject}教科書審查紀錄表</div>
             <div className="doc-info">
-              <div>時間： {r.date}</div>
-              <div>召集人： {CONVENER}</div>
+              <div>時間： {MEETING_DATE || r.date}</div>
+              <div>召集人： ${CONVENER}</div>
               <div>評比教師： {r.reviewers}</div>
               <div>評比說明：</div>
-              <ol className="list-decimal pl-6 mb-2">
-                <li>請參考附件之評選標準，將各版本課本、習作、教學指引一併評比，以求客觀公正。</li>
-                <li>請與同年段該領域授課教師共同討論選用版本，並相互協調意見後再決定版本。</li>
-                <li>若沿用前學年度版本請勾選填寫「沿用　　　版本」；若更換版本請勾選填寫「改用　　　版本」，年度領域小組成員討論並寫下更換原因，並請年段領域選用代表人於會議上報告。</li>
-              </ol>
+              <div className="pl-2 mt-1 mb-3 space-y-1">
+                <div>1. 請參考附件之評選標準,將各版本課本、習作、教學指引一併評比，以求客觀公正。</div>
+                <div>2. 請與同年段該領域授課教師共同討論選用版本,並相互協調意見後再決定版本。</div>
+                <div>3. 若沿用前學年度版本請勾選填寫「沿用______版本」;若更換版本請勾選填寫「改用________版本」,年度領域小組成員討論並寫下更換原因,並請年段領域選用代表人於會議上報告。</div>
+              </div>
               <div>評比意見：</div>
               <div className="pl-4 mt-2">
                 <div><span className={`checkbox-box ${r.decision === 'keep' ? 'checkbox-checked' : ''}`}></span>教科書沿用前學年度 <span className="underline-gap">${keepText}</span> 版本。</div>
                 <div className="mt-2"><span className={`checkbox-box ${r.decision === 'change' ? 'checkbox-checked' : ''}`}></span>教科書改用 <span className="underline-gap">${changeText}</span> 版本，</div>
-                <div className="ml-5 mt-1">更換原因為： <span className="underline-gap-long">{r.reason}</span></div>
+                <div className="ml-5 mt-1">更換原因為： <span className="underline-gap-long">${r.reason}</span></div>
               </div>
             </div>
 
