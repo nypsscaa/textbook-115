@@ -163,12 +163,13 @@
       const [availableSubjects, setAvailableSubjects] = useState([]);
 
       function getInitialFormData() {
-        const initialScores = Array(CRITERIA.length).fill(null).map(() => Array(PUBLISHERS.length).fill(3));
+        const initialScores = Array(CRITERIA.length).fill(null).map(() => Array(PUBLISHERS.length).fill(5));
         return {
           grade: "", subject: "", reviewers: "", decision: "keep", changedPublisher: "", seriesName: "", reason: "", scores: initialScores
         };
       }
 
+      // 每次紀錄更新時，同時備份到 localStorage (防止重整消失)
       useEffect(() => {
         localStorage.setItem('bird_island_textbook_records', JSON.stringify(records));
       }, [records]);
