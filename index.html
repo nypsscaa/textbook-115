@@ -303,7 +303,7 @@
             if (names && names.includes(selectedTeacherForChecklist)) {
               // 檢查雲端紀錄中是否已經有這筆年級+科目的紀錄
               const isCompleted = records.some(r => r.grade === grade && r.subject === subject);
-              tasks.push({ grade, subject, isCompleted });
+              tasks.push({ grade, subject, isCompleted, reviewers: names });
             }
           });
         });
@@ -712,13 +712,18 @@
                         <div key={idx} className={`flex items-center justify-between p-4 rounded-xl border ${task.isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 shadow-sm'}`}>
                           <div className="flex items-center gap-3">
                             {task.isCompleted ? (
-                              <span className="text-green-500"><IconCheckCircle /></span>
+                              <span className="text-green-500 flex-shrink-0"><IconCheckCircle /></span>
                             ) : (
-                              <span className="text-gray-300"><IconXCircle /></span>
+                              <span className="text-gray-300 flex-shrink-0"><IconXCircle /></span>
                             )}
-                            <span className={`font-bold text-lg ${task.isCompleted ? 'text-green-800' : 'text-gray-700'}`}>
-                              {task.grade} {task.subject}
-                            </span>
+                            <div className="flex flex-col">
+                              <span className={`font-bold text-lg ${task.isCompleted ? 'text-green-800' : 'text-gray-700'}`}>
+                                {task.grade} {task.subject}
+                              </span>
+                              <span className="text-sm text-gray-500 mt-1">
+                                評比教師：{task.reviewers}
+                              </span>
+                            </div>
                           </div>
                           <div>
                             {task.isCompleted ? (
