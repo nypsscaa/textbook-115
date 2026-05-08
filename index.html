@@ -5,19 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>鳥嶼國小 115學年度教科書選用系統</title>
   
+  <!-- 載入 Tailwind CSS (排版樣式) -->
   <script src="https://cdn.tailwindcss.com"></script>
   
+  <!-- 載入 React 核心套件 -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   
+  <!-- 載入 Babel (讓瀏覽器看得懂 React 語法) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <!-- 載入 HTML 轉 PDF 套件 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800">
   
+  <!-- React 系統的渲染容器 -->
   <div id="root"></div>
 
+  <!-- 主要程式碼邏輯 -->
   <script type="text/babel" data-type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -434,7 +440,7 @@
         setTimeout(() => window.print(), 500);
       };
 
-      // 🌟 ★ 徹底修復 PDF 版面跑位、第一頁空白、表格消失的問題
+      // 🌟 ★ 徹底修復 PDF 版面空白、跑位、表格消失的問題
       const exportToPDF = (record) => {
         showToast("PDF 產生中，請稍候...");
         const totals = PUBLISHERS.map((_, i) => calculateTotal(record.scores, i));
@@ -442,105 +448,98 @@
         const keepText = record.decision === 'keep' ? (record.seriesName ? `${record.prevVersion}-${record.seriesName}` : record.prevVersion) : '';
         const changeText = record.decision === 'change' ? (record.seriesName ? `${record.changedPublisher}-${record.seriesName}` : record.changedPublisher) : '';
 
-        // 建立一個實體的隱藏 DOM 元素，讓瀏覽器能夠精準計算高度
-        const container = document.createElement('div');
-        container.style.position = 'absolute';
-        container.style.left = '-9999px';
-        container.style.top = '0';
-        container.style.width = '210mm'; // 強制 A4 寬度
-        container.style.backgroundColor = 'white';
-        
-        container.innerHTML = `
-          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; padding: 15mm 15mm 0 15mm;">
-            <div style="font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 25px; letter-spacing: 2px;">
+        // 建立一個純粹的 HTML 元素，不掛載到畫面上，避免負值座標干擾渲染
+        const element = document.createElement('div');
+        element.innerHTML = `
+          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; font-size: 16px; line-height: 1.8; width: 100%;">
+            <!-- 第一頁：審查紀錄表 -->
+            <div style="font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 25px; letter-spacing: 2px;">
               ${SCHOOL_NAME}${ACADEMIC_YEAR}學年度${record.grade}${record.subject}教科書審查紀錄表
             </div>
-            <div style="font-size: 14pt; line-height: 2;">
-              <div>時間： ${MEETING_DATE || record.date}</div>
-              <div>召集人： ${CONVENER}</div>
-              <div>評比教師： ${record.reviewers}</div>
-              <div>評比說明：</div>
-              <div style="padding-left: 10px; margin-top: 5px; margin-bottom: 10px;">
-                <div>1. 請參考附件之評選標準,將各版本課本、習作、教學指引一併評比，以求客觀公正。</div>
-                <div>2. 請與同年段該領域授課教師共同討論選用版本,並相互協調意見後再決定版本。</div>
-                <div>3. 若沿用前學年度版本請勾選填寫「沿用______版本」;若更換版本請勾選填寫「改用________版本」,年度領域小組成員討論並寫下更換原因,並請年段領域選用代表人於會議上報告。</div>
+            
+            <div style="margin-bottom: 8px;">時間： ${MEETING_DATE || record.date}</div>
+            <div style="margin-bottom: 8px;">召集人： ${CONVENER}</div>
+            <div style="margin-bottom: 8px;">評比教師： ${record.reviewers}</div>
+            
+            <div style="margin-bottom: 4px;">評比說明：</div>
+            <div style="padding-left: 20px; margin-bottom: 16px;">
+              <div>1. 請參考附件之評選標準，將各版本課本、習作、教學指引一併評比，以求客觀公正。</div>
+              <div>2. 請與同年段該領域授課教師共同討論選用版本，並相互協調意見後再決定版本。</div>
+              <div>3. 若沿用前學年度版本請勾選填寫「沿用______版本」；若更換版本請勾選填寫「改用________版本」，年度領域小組成員討論並寫下更換原因，並請年段領域選用代表人於會議上報告。</div>
+            </div>
+            
+            <div style="margin-bottom: 8px;">評比意見：</div>
+            <div style="padding-left: 24px; margin-bottom: 20px;">
+              <div style="margin-bottom: 12px;">
+                <span style="display:inline-block; width:16px; height:16px; border:1px solid black; margin-right:8px; text-align:center; line-height:16px;">
+                  ${record.decision === 'keep' ? '✓' : '&nbsp;'}
+                </span>
+                教科書沿用前學年度 <span style="text-decoration: underline; padding: 0 10px;">${keepText || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> 版本。
               </div>
-              <div>評比意見：</div>
-              <div style="padding-left: 20px; margin-top: 15px;">
-                <div>
-                  <span style="display:inline-block; width:16px; height:16px; border:1px solid black; margin-right:8px; text-align:center; line-height:16px; font-size:14px; font-weight:bold; vertical-align:middle;">
-                    ${record.decision === 'keep' ? '✓' : '&nbsp;'}
-                  </span>
-                  教科書沿用前學年度 <span style="display:inline-block; border-bottom:1px solid black; min-width:120px; text-align:center; padding:0 10px;">${keepText}</span> 版本。
-                </div>
-                <div style="margin-top: 15px;">
-                  <span style="display:inline-block; width:16px; height:16px; border:1px solid black; margin-right:8px; text-align:center; line-height:16px; font-size:14px; font-weight:bold; vertical-align:middle;">
-                    ${record.decision === 'change' ? '✓' : '&nbsp;'}
-                  </span>
-                  教科書改用 <span style="display:inline-block; border-bottom:1px solid black; min-width:120px; text-align:center; padding:0 10px;">${changeText}</span> 版本，
-                </div>
-                <div style="margin-left: 28px; margin-top: 10px;">
-                  更換原因為： <span style="display:inline-block; border-bottom:1px solid black; min-width:400px; padding:0 10px; word-break: break-all;">${record.reason}</span>
-                </div>
+              <div style="margin-bottom: 12px;">
+                <span style="display:inline-block; width:16px; height:16px; border:1px solid black; margin-right:8px; text-align:center; line-height:16px;">
+                  ${record.decision === 'change' ? '✓' : '&nbsp;'}
+                </span>
+                教科書改用 <span style="text-decoration: underline; padding: 0 10px;">${changeText || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span> 版本，
+              </div>
+              <div style="margin-left: 28px;">
+                更換原因為： <span style="text-decoration: underline; word-break: break-all;">${record.reason || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span>
               </div>
             </div>
-          </div>
-          
-          <div class="pdf-page-break" style="page-break-before: always;"></div>
+            
+            <!-- 斷頁器，由 html2pdf 強制識別 -->
+            <div class="pdf-page-break"></div>
 
-          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; padding: 15mm 15mm 0 15mm;">
-            <div style="font-weight: bold; margin-bottom: 15px; font-size: 16pt;">附件 評選標準參考</div>
-            <table style="width: 100%; border-collapse: collapse; font-size: 13pt;">
-              <thead>
-                <tr>
-                  <th rowspan="2" style="width: 45%; border: 1px solid black; padding: 8px; text-align: center;">評比內容</th>
-                  <th colspan="3" style="border: 1px solid black; padding: 8px; text-align: center;">版本</th>
-                </tr>
-                <tr>
-                  ${PUBLISHERS.map(pub => `<th style="border: 1px solid black; padding: 8px; text-align: center;">${pub}</th>`).join('')}
-                </tr>
-                <tr style="font-size: 10pt; font-weight: normal;">
-                  <th style="border: 1px solid black; padding: 8px;"></th>
-                  ${PUBLISHERS.map(() => `<th style="border: 1px solid black; padding: 8px; text-align: center;">極佳 5 佳 4 尚可 3 差 2 極差 1</th>`).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${CRITERIA.map((criterion, cIdx) => `
+            <!-- 第二頁：評選標準 -->
+            <div style="margin-top: 10px;">
+              <div style="font-weight: bold; font-size: 20px; margin-bottom: 16px;">附件 評選標準參考</div>
+              <table style="width: 100%; border-collapse: collapse; border: 1px solid black; text-align: center;">
+                <thead>
                   <tr>
-                    <td style="border: 1px solid black; padding: 8px;">${criterion}</td>
-                    ${PUBLISHERS.map((pub, pIdx) => `<td style="text-align: center; border: 1px solid black; padding: 8px;">${record.scores[cIdx][pIdx]}</td>`).join('')}
+                    <th rowspan="2" style="border: 1px solid black; padding: 10px; width: 45%;">評比內容</th>
+                    <th colspan="3" style="border: 1px solid black; padding: 10px;">版本</th>
                   </tr>
-                `).join('')}
-                <tr style="font-weight: bold;">
-                  <td style="text-align: right; border: 1px solid black; padding: 8px;">總分</td>
-                  ${totals.map((t) => `<td style="text-align: center; border: 1px solid black; padding: 8px;">${t}</td>`).join('')}
-                </tr>
-                <tr style="font-weight: bold;">
-                  <td style="text-align: right; border: 1px solid black; padding: 8px;">名次（順位）</td>
-                  ${ranks.map((rank) => `<td style="text-align: center; border: 1px solid black; padding: 8px;">${rank}</td>`).join('')}
-                </tr>
-              </tbody>
-            </table>
+                  <tr>
+                    ${PUBLISHERS.map(pub => `<th style="border: 1px solid black; padding: 10px;">${pub}</th>`).join('')}
+                  </tr>
+                  <tr style="font-size: 12px; font-weight: normal;">
+                    <th style="border: 1px solid black; padding: 10px;"></th>
+                    ${PUBLISHERS.map(() => `<th style="border: 1px solid black; padding: 10px;">極佳 5&nbsp;&nbsp;佳 4&nbsp;&nbsp;尚可 3&nbsp;&nbsp;差 2&nbsp;&nbsp;極差 1</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${CRITERIA.map((criterion, cIdx) => `
+                    <tr>
+                      <td style="border: 1px solid black; padding: 10px; text-align: left;">${criterion}</td>
+                      ${PUBLISHERS.map((pub, pIdx) => `<td style="border: 1px solid black; padding: 10px;">${record.scores[cIdx][pIdx]}</td>`).join('')}
+                    </tr>
+                  `).join('')}
+                  <tr style="font-weight: bold;">
+                    <td style="border: 1px solid black; padding: 10px; text-align: right;">總分</td>
+                    ${totals.map((t) => `<td style="border: 1px solid black; padding: 10px;">${t}</td>`).join('')}
+                  </tr>
+                  <tr style="font-weight: bold;">
+                    <td style="border: 1px solid black; padding: 10px; text-align: right;">名次（順位）</td>
+                    ${ranks.map((rank) => `<td style="border: 1px solid black; padding: 10px;">${rank}</td>`).join('')}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         `;
 
-        // 必須將元素掛載到畫面上，套件才能正確渲染
-        document.body.appendChild(container);
-
         const opt = {
-          margin:       0, // 因為已經寫在 html 的 padding 裡了
+          margin:       15, // 統一由套件計算四周安全邊距(1.5公分)
           filename:     `${record.grade}${record.subject}_審查紀錄表.pdf`,
-          image:        { type: 'jpeg', quality: 1 },
-          html2canvas:  { scale: 2, useCORS: true, logging: false },
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true, windowWidth: 800 }, // 強制設定虛擬寬度，避免縮放跑位
           jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak:    { mode: ['css', 'legacy'], before: '.pdf-page-break' }
         };
 
-        html2pdf().set(opt).from(container).save().then(() => {
-          document.body.removeChild(container); // 完成後移除隱藏元素
+        html2pdf().set(opt).from(element).save().then(() => {
           showToast("PDF 檔案已成功下載！");
         }).catch(err => {
-          document.body.removeChild(container);
           console.error("PDF 產生失敗", err);
           showToast("PDF 產生失敗，請再試一次。");
         });
