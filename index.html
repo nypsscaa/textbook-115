@@ -456,7 +456,7 @@ const PREV_VERSIONS = {
         setTimeout(() => window.print(), 500);
       };
 
-      // --- 匯出 PDF ---
+// --- 匯出 PDF (完美鎖定排版，強制套用全域 MEETING_DATE，並修正說明文字格式) ---
       const exportToPDF = (record) => {
         showToast("PDF 產生中，請稍候...");
         const totals = PUBLISHERS.map((_, i) => calculateTotal(record.scores, i));
@@ -464,10 +464,11 @@ const PREV_VERSIONS = {
         const keepText = record.decision === 'keep' ? (record.seriesName ? `${record.prevVersion}-${record.seriesName}` : record.prevVersion) : '';
         const changeText = record.decision === 'change' ? (record.seriesName ? `${record.changedPublisher}-${record.seriesName}` : record.changedPublisher) : '';
 
+        // 建立隱藏的 HTML 元素提供給 html2pdf 擷取
         const element = document.createElement('div');
+        // 🌟 修改重點 1：移除寫死的 width 與 padding，讓內容自然延展
         element.innerHTML = `
-          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; padding: 10mm 15mm; background: white; width: 210mm;">
-            <!-- 第一頁：審查紀錄表 -->
+          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; background: white;">
             <div style="font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 25px; letter-spacing: 2px;">
               ${SCHOOL_NAME}${ACADEMIC_YEAR}學年度${record.grade}${record.subject}教科書審查紀錄表
             </div>
@@ -496,15 +497,14 @@ const PREV_VERSIONS = {
                   教科書改用 <span style="display:inline-block; border-bottom:1px solid black; min-width:120px; text-align:center; padding:0 10px;">${changeText}</span> 版本，
                 </div>
                 <div style="margin-left: 28px; margin-top: 10px;">
-                  更換原因為： <span style="display:inline-block; border-bottom:1px solid black; width:400px; padding:0 10px;">${record.reason}</span>
+                  更換原因為： <span style="display:inline-block; border-bottom:1px solid black; min-width:300px; padding:0 10px; word-break: break-all;">${record.reason}</span>
                 </div>
               </div>
             </div>
             
-            <div class="html2pdf__page-break"></div>
+            <div class="pdf-page-break"></div>
 
-            <!-- 第二頁：評選標準 -->
-            <div style="margin-top: 20px; padding-top: 20px;">
+            <div style="padding-top: 10px;">
               <div style="font-weight: bold; margin-bottom: 15px; font-size: 16pt;">附件 評選標準參考</div>
               <table style="width: 100%; border-collapse: collapse; font-size: 13pt;">
                 <thead>
@@ -541,12 +541,14 @@ const PREV_VERSIONS = {
           </div>
         `;
 
+        // 🌟 修改重點 3：由套件接管所有 A4 邊距與強迫斷頁設定
         const opt = {
-          margin:       0,
+          margin:       15, // 統一設定上下左右 15mm 的安全邊距
           filename:     `${record.grade}${record.subject}_審查紀錄表.pdf`,
           image:        { type: 'jpeg', quality: 0.98 },
           html2canvas:  { scale: 2, useCORS: true },
-          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak:    { mode: 'css', before: '.pdf-page-break' } // 強制告訴套件：遇到這個標籤，無論如何立刻換頁
         };
 
         html2pdf().set(opt).from(element).save().then(() => {
