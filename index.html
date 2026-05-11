@@ -77,7 +77,6 @@
       "語文領域國語文", "語文領域英語文", "數學領域", "自然科學領域", "社會領域", "藝術領域", "綜合活動領域", "健康與體育領域"
     ];
 
-    // ★ 已將三年級數學修改為康軒
     const PREV_VERSIONS = {
       "一年級_語文領域國語文": "康軒", "二年級_語文領域國語文": "南一", "三年級_語文領域國語文": "康軒", "四年級_語文領域國語文": "康軒", "五年級_語文領域國語文": "康軒", "六年級_語文領域國語文": "康軒",
       "三年級_語文領域英語文": "康軒", "四年級_語文領域英語文": "康軒", "五年級_語文領域英語文": "康軒", "六年級_語文領域英語文": "翰林",
@@ -91,7 +90,6 @@
       "一年級_彈性課程望潮英創客": "翰林", "二年級_彈性課程望潮英創客": "翰林",
     };
 
-    // 預設的教師分配表
     const DEFAULT_TEACHER_ALLOCATION = {
       "一年級": { "語文領域國語文": "王柔棉、夏先霓", "數學領域": "王柔棉、夏先霓", "生活課程": "許志宏、陳彥芃", "健康與體育領域": "許志宏、鄧嘉瑋", "彈性課程望潮英創客": "王柔棉、夏先霓" },
       "二年級": { "語文領域國語文": "夏先霓、王柔棉", "數學領域": "夏先霓、王柔棉", "生活課程": "李一蓁、陳彥芃", "健康與體育領域": "許志宏、鄧嘉瑋", "彈性課程望潮英創客": "夏先霓、王柔棉" },
@@ -160,7 +158,6 @@
       const [formData, setFormData] = useState(getInitialFormData());
       const [availableSubjects, setAvailableSubjects] = useState([]);
 
-      // ★ 預設所有分數為 5 分
       function getInitialFormData() {
         const initialScores = Array(CRITERIA.length).fill(null).map(() => Array(PUBLISHERS.length).fill(5));
         return {
@@ -298,7 +295,6 @@
         });
         return tasks.sort((a, b) => (a.isCompleted === b.isCompleted ? 0 : a.isCompleted ? 1 : -1));
       }, [selectedTeacherForChecklist, allocationData, records]);
-
 
       const handleAdminToggle = () => {
         if (isAdmin) {
@@ -440,7 +436,7 @@
         setTimeout(() => window.print(), 500);
       };
 
-      // 🌟 ★ 徹底修復 PDF 版面空白、跑位、表格消失的問題
+      // 🌟 ★ 徹底修復 PDF 版面空白、跑位、表格消失的問題 ★ 🌟
       const exportToPDF = (record) => {
         showToast("PDF 產生中，請稍候...");
         const totals = PUBLISHERS.map((_, i) => calculateTotal(record.scores, i));
@@ -448,10 +444,17 @@
         const keepText = record.decision === 'keep' ? (record.seriesName ? `${record.prevVersion}-${record.seriesName}` : record.prevVersion) : '';
         const changeText = record.decision === 'change' ? (record.seriesName ? `${record.changedPublisher}-${record.seriesName}` : record.changedPublisher) : '';
 
-        // 建立一個純粹的 HTML 元素，不掛載到畫面上，避免負值座標干擾渲染
-        const element = document.createElement('div');
-        element.innerHTML = `
-          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; font-size: 16px; line-height: 1.8; width: 100%;">
+        // 建立一個真實的 DOM 元素，並加上強制寬高，且確保附加到畫面上(但藏在底下)
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.top = '200%'; // 藏在畫面外，不會被看見
+        container.style.left = '0';
+        container.style.width = '800px'; // ★ 絕對鎖定 800px 寬度，避免自動縮放擠壓表格
+        container.style.backgroundColor = 'white';
+        container.style.zIndex = '-9999';
+
+        container.innerHTML = `
+          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; font-size: 16px; line-height: 1.8; padding: 40px; box-sizing: border-box;">
             <!-- 第一頁：審查紀錄表 -->
             <div style="font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 25px; letter-spacing: 2px;">
               ${SCHOOL_NAME}${ACADEMIC_YEAR}學年度${record.grade}${record.subject}教科書審查紀錄表
@@ -487,24 +490,25 @@
               </div>
             </div>
             
-            <!-- 斷頁器，由 html2pdf 強制識別 -->
+            <!-- ★ 斷頁器：強制切開第一頁與第二頁 -->
             <div class="pdf-page-break"></div>
 
             <!-- 第二頁：評選標準 -->
-            <div style="margin-top: 10px;">
+            <div style="margin-top: 10px; padding-top: 40px;">
               <div style="font-weight: bold; font-size: 20px; margin-bottom: 16px;">附件 評選標準參考</div>
               <table style="width: 100%; border-collapse: collapse; border: 1px solid black; text-align: center;">
                 <thead>
                   <tr>
-                    <th rowspan="2" style="border: 1px solid black; padding: 10px; width: 45%;">評比內容</th>
+                    <th rowspan="2" style="border: 1px solid black; padding: 10px; width: 40%;">評比內容</th>
                     <th colspan="3" style="border: 1px solid black; padding: 10px;">版本</th>
                   </tr>
                   <tr>
                     ${PUBLISHERS.map(pub => `<th style="border: 1px solid black; padding: 10px;">${pub}</th>`).join('')}
                   </tr>
-                  <tr style="font-size: 12px; font-weight: normal;">
+                  <tr style="font-size: 13px; font-weight: normal;">
                     <th style="border: 1px solid black; padding: 10px;"></th>
-                    ${PUBLISHERS.map(() => `<th style="border: 1px solid black; padding: 10px;">極佳 5&nbsp;&nbsp;佳 4&nbsp;&nbsp;尚可 3&nbsp;&nbsp;差 2&nbsp;&nbsp;極差 1</th>`).join('')}
+                    <!-- ★ 強制使用 <br/> 斷行，防止表格寬度被撐破 -->
+                    ${PUBLISHERS.map(() => `<th style="border: 1px solid black; padding: 8px;">極佳 5&nbsp;佳 4&nbsp;尚可 3<br/>差 2&nbsp;極差 1</th>`).join('')}
                   </tr>
                 </thead>
                 <tbody>
@@ -528,21 +532,29 @@
           </div>
         `;
 
+        // 將隱藏物件實際加入畫面
+        document.body.appendChild(container);
+
         const opt = {
-          margin:       15, // 統一由套件計算四周安全邊距(1.5公分)
+          margin:       0,
           filename:     `${record.grade}${record.subject}_審查紀錄表.pdf`,
-          image:        { type: 'jpeg', quality: 0.98 },
-          html2canvas:  { scale: 2, useCORS: true, windowWidth: 800 }, // 強制設定虛擬寬度，避免縮放跑位
-          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak:    { mode: ['css', 'legacy'], before: '.pdf-page-break' }
+          image:        { type: 'jpeg', quality: 1 },
+          html2canvas:  { scale: 2, useCORS: true, logging: false },
+          jsPDF:        { unit: 'px', format: [800, 1131], orientation: 'portrait' }, // 800px 寬度對應的精準 A4 長度
+          pagebreak:    { mode: 'css', before: '.pdf-page-break' }
         };
 
-        html2pdf().set(opt).from(element).save().then(() => {
-          showToast("PDF 檔案已成功下載！");
-        }).catch(err => {
-          console.error("PDF 產生失敗", err);
-          showToast("PDF 產生失敗，請再試一次。");
-        });
+        // ★ 關鍵修復：等候 0.5 秒，確保瀏覽器已經將剛貼上的文字排版與字型載入完畢，才開始畫 PDF
+        setTimeout(() => {
+          html2pdf().set(opt).from(container).save().then(() => {
+            document.body.removeChild(container);
+            showToast("PDF 檔案已成功下載！");
+          }).catch(err => {
+            console.error("PDF 產生失敗", err);
+            document.body.removeChild(container);
+            showToast("PDF 產生失敗，請再試一次。");
+          });
+        }, 500);
       };
 
       const exportToWord = (record) => {
@@ -1131,7 +1143,7 @@
                 <thead>
                   <tr><th rowSpan={2} style={{width: '40%'}}>評比內容</th><th colSpan={3}>版本</th></tr>
                   <tr>{PUBLISHERS.map(pub => <th key={pub}>{pub}</th>)}</tr>
-                  <tr style={{fontSize: '0.8rem'}}><th></th>{PUBLISHERS.map(pub => <th key={`score-${pub}`} style={{fontWeight: 'normal'}}>極佳 5 佳 4 尚可 3 差 2 極差 1</th>)}</tr>
+                  <tr style={{fontSize: '0.8rem'}}><th></th>{PUBLISHERS.map(pub => <th key={`score-${pub}`} style={{fontWeight: 'normal'}}>極佳 5 佳 4 尚可 3<br/>差 2 極差 1</th>)}</tr>
                 </thead>
                 <tbody>
                   {CRITERIA.map((criterion, cIdx) => (
