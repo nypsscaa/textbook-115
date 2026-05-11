@@ -77,6 +77,7 @@
       "語文領域國語文", "語文領域英語文", "數學領域", "自然科學領域", "社會領域", "藝術領域", "綜合活動領域", "健康與體育領域"
     ];
 
+    // ★ 已將三年級數學修改為康軒
     const PREV_VERSIONS = {
       "一年級_語文領域國語文": "康軒", "二年級_語文領域國語文": "南一", "三年級_語文領域國語文": "康軒", "四年級_語文領域國語文": "康軒", "五年級_語文領域國語文": "康軒", "六年級_語文領域國語文": "康軒",
       "三年級_語文領域英語文": "康軒", "四年級_語文領域英語文": "康軒", "五年級_語文領域英語文": "康軒", "六年級_語文領域英語文": "翰林",
@@ -90,6 +91,7 @@
       "一年級_彈性課程望潮英創客": "翰林", "二年級_彈性課程望潮英創客": "翰林",
     };
 
+    // 預設的教師分配表
     const DEFAULT_TEACHER_ALLOCATION = {
       "一年級": { "語文領域國語文": "王柔棉、夏先霓", "數學領域": "王柔棉、夏先霓", "生活課程": "許志宏、陳彥芃", "健康與體育領域": "許志宏、鄧嘉瑋", "彈性課程望潮英創客": "王柔棉、夏先霓" },
       "二年級": { "語文領域國語文": "夏先霓、王柔棉", "數學領域": "夏先霓、王柔棉", "生活課程": "李一蓁、陳彥芃", "健康與體育領域": "許志宏、鄧嘉瑋", "彈性課程望潮英創客": "夏先霓、王柔棉" },
@@ -436,7 +438,7 @@
         setTimeout(() => window.print(), 500);
       };
 
-      // 🌟 ★ 徹底修復 PDF 版面空白、跑位、表格消失的問題 ★ 🌟
+      // ★ 放棄 html2pdf 實體掛載法，改用最穩定的字串直接轉換法
       const exportToPDF = (record) => {
         showToast("PDF 產生中，請稍候...");
         const totals = PUBLISHERS.map((_, i) => calculateTotal(record.scores, i));
@@ -444,17 +446,9 @@
         const keepText = record.decision === 'keep' ? (record.seriesName ? `${record.prevVersion}-${record.seriesName}` : record.prevVersion) : '';
         const changeText = record.decision === 'change' ? (record.seriesName ? `${record.changedPublisher}-${record.seriesName}` : record.changedPublisher) : '';
 
-        // 建立一個真實的 DOM 元素，並加上強制寬高，且確保附加到畫面上(但藏在底下)
-        const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.top = '200%'; // 藏在畫面外，不會被看見
-        container.style.left = '0';
-        container.style.width = '800px'; // ★ 絕對鎖定 800px 寬度，避免自動縮放擠壓表格
-        container.style.backgroundColor = 'white';
-        container.style.zIndex = '-9999';
-
-        container.innerHTML = `
-          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; font-size: 16px; line-height: 1.8; padding: 40px; box-sizing: border-box;">
+        // 不再掛載到 document，直接使用純字串交給 html2pdf 引擎
+        const htmlString = `
+          <div style="font-family: '標楷體', 'DFKai-SB', serif; color: black; font-size: 16px; line-height: 1.8; padding: 40px; box-sizing: border-box; background: white;">
             <!-- 第一頁：審查紀錄表 -->
             <div style="font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 25px; letter-spacing: 2px;">
               ${SCHOOL_NAME}${ACADEMIC_YEAR}學年度${record.grade}${record.subject}教科書審查紀錄表
@@ -490,7 +484,7 @@
               </div>
             </div>
             
-            <!-- ★ 斷頁器：強制切開第一頁與第二頁 -->
+            <!-- 斷頁器 -->
             <div class="pdf-page-break"></div>
 
             <!-- 第二頁：評選標準 -->
@@ -507,7 +501,6 @@
                   </tr>
                   <tr style="font-size: 13px; font-weight: normal;">
                     <th style="border: 1px solid black; padding: 10px;"></th>
-                    <!-- ★ 強制使用 <br/> 斷行，防止表格寬度被撐破 -->
                     ${PUBLISHERS.map(() => `<th style="border: 1px solid black; padding: 8px;">極佳 5&nbsp;佳 4&nbsp;尚可 3<br/>差 2&nbsp;極差 1</th>`).join('')}
                   </tr>
                 </thead>
@@ -532,29 +525,21 @@
           </div>
         `;
 
-        // 將隱藏物件實際加入畫面
-        document.body.appendChild(container);
-
         const opt = {
           margin:       0,
           filename:     `${record.grade}${record.subject}_審查紀錄表.pdf`,
           image:        { type: 'jpeg', quality: 1 },
-          html2canvas:  { scale: 2, useCORS: true, logging: false },
-          jsPDF:        { unit: 'px', format: [800, 1131], orientation: 'portrait' }, // 800px 寬度對應的精準 A4 長度
+          html2canvas:  { scale: 2, useCORS: true, windowWidth: 800 }, 
+          jsPDF:        { unit: 'px', format: [800, 1131], orientation: 'portrait' }, 
           pagebreak:    { mode: 'css', before: '.pdf-page-break' }
         };
 
-        // ★ 關鍵修復：等候 0.5 秒，確保瀏覽器已經將剛貼上的文字排版與字型載入完畢，才開始畫 PDF
-        setTimeout(() => {
-          html2pdf().set(opt).from(container).save().then(() => {
-            document.body.removeChild(container);
-            showToast("PDF 檔案已成功下載！");
-          }).catch(err => {
-            console.error("PDF 產生失敗", err);
-            document.body.removeChild(container);
-            showToast("PDF 產生失敗，請再試一次。");
-          });
-        }, 500);
+        html2pdf().set(opt).from(htmlString).save().then(() => {
+          showToast("PDF 檔案已成功下載！");
+        }).catch(err => {
+          console.error("PDF 產生失敗", err);
+          showToast("PDF 產生失敗，請再試一次。");
+        });
       };
 
       const exportToWord = (record) => {
@@ -1090,6 +1075,7 @@
         );
       };
 
+      // 🌟 ★ 徹底修復：預覽模式出現 $ 符號的語法錯誤
       const renderPrint = () => {
         if (!printRecord) return null;
         const r = printRecord;
@@ -1105,7 +1091,8 @@
               @media print {
                 body * { visibility: hidden; }
                 .print-container, .print-container * { visibility: visible; }
-                .print-container { position: absolute; left: 0; top: 0; width: 100%; }
+                .print-container { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 @page { margin: 1.5cm; }
               }
               .doc-title { font-size: 1.25rem; font-weight: bold; text-align: center; margin-bottom: 1.5rem; letter-spacing: 0.05em;}
@@ -1120,9 +1107,10 @@
 
             <div className="doc-title">{SCHOOL_NAME}{ACADEMIC_YEAR}學年度{r.grade}{r.subject}教科書審查紀錄表</div>
             <div className="doc-info">
-              <div>時間： ${MEETING_DATE || r.date}</div>
-              <div>召集人： ${CONVENER}</div>
-              <div>評比教師： ${r.reviewers}</div>
+              {/* 修復了所有的 $ 符號 */}
+              <div>時間： {MEETING_DATE || r.date}</div>
+              <div>召集人： {CONVENER}</div>
+              <div>評比教師： {r.reviewers}</div>
               <div>評比說明：</div>
               <div className="pl-2 mt-1 mb-3 space-y-1">
                 <div>1. 請參考附件之評選標準,將各版本課本、習作、教學指引一併評比，以求客觀公正。</div>
@@ -1131,9 +1119,9 @@
               </div>
               <div>評比意見：</div>
               <div className="pl-4 mt-2">
-                <div><span className={`checkbox-box ${r.decision === 'keep' ? 'checkbox-checked' : ''}`}></span>教科書沿用前學年度 <span className="underline-gap">${keepText}</span> 版本。</div>
-                <div className="mt-2"><span className={`checkbox-box ${r.decision === 'change' ? 'checkbox-checked' : ''}`}></span>教科書改用 <span className="underline-gap">${changeText}</span> 版本，</div>
-                <div className="ml-5 mt-1">更換原因為： <span className="underline-gap-long">${r.reason}</span></div>
+                <div><span className={`checkbox-box ${r.decision === 'keep' ? 'checkbox-checked' : ''}`}></span>教科書沿用前學年度 <span className="underline-gap">{keepText}</span> 版本。</div>
+                <div className="mt-2"><span className={`checkbox-box ${r.decision === 'change' ? 'checkbox-checked' : ''}`}></span>教科書改用 <span className="underline-gap">{changeText}</span> 版本，</div>
+                <div className="ml-5 mt-1">更換原因為： <span className="underline-gap-long">{r.reason}</span></div>
               </div>
             </div>
 
